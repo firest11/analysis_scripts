@@ -1,7 +1,6 @@
 import functools as ft
 import itertools as it
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 def jk_blocks(data, jk_smp, axis=None):
@@ -27,6 +26,22 @@ def jk_blocks(data, jk_smp, axis=None):
         inds += 1
 
     return blocks
+
+
+def calc_mean_var(data, axis=None):
+    """
+    returns mean and var. 
+    A check for jk-functions below
+    """
+    dtype = data.dtype
+    mean = np.mean(data, axis, dtype)
+    diffs = [
+        pow(mean - dat, 2) for dat in data
+    ]
+    variance = ft.reduce(x, y: x + y, diffs)
+    variance *= 1/float(len(diffs) - 1.0)
+
+    return mean, np.sqrt(variance)
 
 
 def calc_jk_mean_var(data, blocks, axis=None):
