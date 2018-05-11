@@ -38,8 +38,8 @@ def calc_mean_var(data, axis=None):
     diffs = [
         pow(mean - dat, 2) for dat in data
     ]
-    variance = ft.reduce(x, y: x + y, diffs)
-    variance *= 1/float(len(diffs) - 1.0)
+    variance = ft.reduce(lambda x, y: x + y, diffs)
+    variance *= 1/float(len(diffs) - 0.0)
 
     return mean, np.sqrt(variance)
 
