@@ -127,7 +127,27 @@ def key_to_file(key, aff_file, csrc_ind=None, insert=None, delim=None):
     return newkey
 
 
-def key_to_bias_file_list(key, bias_list, csrc_ind=None,
+def key_to_ex_file_list(key, bias_list, sl_list, csrc_ind=None,
+                        insert=None, delim=None):
+    """ Gets key structure for the bias list in the form of ex_key """
+    key_list = []
+    for (ex, sl) in bias_list:
+        ex_key = key_to_file(key, ex, csrc_ind, insert, delim)
+        key_list.append(ex_key)
+    return key_list
+
+
+def key_to_sl_file_list(key, bias_list, sl_list, csrc_ind=None,
+                        insert=None, delim=None):
+    """ Gets key structure for all sloppy files """
+    key_list = [
+        key_to_file(key, fle, csrc_ind, insert, delim)
+        for fle in sl_list
+    ]
+    return key_list
+
+
+def key_to_bias_file_list(key, bias_list, sl_list, csrc_ind=None,
                           insert=None, delim=None):
     """ Gets key structure for the bias list in the form of (ex_key, sl_key) """
     key_list = []
@@ -139,18 +159,8 @@ def key_to_bias_file_list(key, bias_list, csrc_ind=None,
     return key_list
 
 
-def key_to_sl_file_list(key, file_list, csrc_ind=None,
-                        insert=None, delim=None):
-    """ Gets key structure for all sloppy files """
-    key_list = [
-        key_to_file(key, fle, csrc_ind, insert, delim)
-        for fle in file_list
-    ]
-    return key_list
-
-
-def key_ama_file_list(key, bias_list, sl_list,
-                      csrc_ind=None, insert=None, delim=None):
+def key_to_ama_file_list(key, bias_list, sl_list, csrc_ind=None,
+                         insert=None, delim=None):
     """
     Gets the full key structure for both bias and sloppy
     solves without introducing (as far as I can think of)
@@ -166,7 +176,8 @@ def key_ama_file_list(key, bias_list, sl_list,
         key_to_file(key, fle, csrc_ind, insert, delim)
         for fle in file_list
     ]
-    return bs_key_list, sl_key_list
+    key_list = (bs_key_list, sl_key_list)
+    return return key_list
 
 
 def get_aff_data(aff_r, aff_key, mom_labels, phases=None):
@@ -193,11 +204,10 @@ def get_aff_data(aff_r, aff_key, mom_labels, phases=None):
     return aff_data
 
 
-def get_ex_data_per_config(bias_list, bias_key_list,
-                           sl_list, sl_key_list, mom_labels):
+def get_ex_data_per_config(bias_list, sl_list, key_list, mom_labels):
     """ gets data from ex-solve """
     ex_data = None
-    for file_pairs, keys in zip(bias_list, bias_key_list):
+    for file_pairs, keys in zip(bias_list, key_list):
         file_ex = file_pairs[0]
         aff_ex = aff.Reader(file_ex)
         dat_ex = get_aff_data(aff_ex, keys[0], mom_labels)
@@ -211,13 +221,12 @@ def get_ex_data_per_config(bias_list, bias_key_list,
     return ex_data
 
 
-def get_sl_data_per_config(bias_list, bias_key_list,
-                           sl_list, sl_key_list, mom_labels):
+def get_sl_data_per_config(bias_list, sl_list, key_list, mom_labels):
     """ gets data from sl-solve """
     aff_sl_list = [aff.Reader(f_sl) for f_sl in sl_list]
     aff_sl = np.asarray([
         get_aff_data(afr, ksl, mom_labels)
-        for afr, ksl in zip(aff_sl_list, sl_key_list)
+        for afr, ksl in zip(aff_sl_list, key_list)
     ])
     sl_data = aff_sl.mean(axis=0)
     for aff_r in aff_sl_list:
@@ -226,11 +235,10 @@ def get_sl_data_per_config(bias_list, bias_key_list,
     return sl_data
 
 
-def get_bias_data_per_config(bias_list, bias_key_list,
-                             sl_list, sl_key_list, mom_labels):
+def get_bias_data_per_config(bias_list, sl_list, key_list, mom_labels):
     """ gets bias data from (ex and sl)-solves """
     bias_data = None
-    for file_pairs, keys in zip(bias_list, bias_key_list):
+    for file_pairs, keys in zip(bias_list, key_list):
         file_ex, file_sl = file_pairs
         aff_ex, aff_sl = aff.Reader(file_ex), aff.Reader(file_sl)
         dat_ex = get_aff_data(aff_ex, keys[0], mom_labels)
@@ -246,9 +254,9 @@ def get_bias_data_per_config(bias_list, bias_key_list,
     return bias_data
 
 
-def get_ama_data_per_config(bias_list, bias_key_list,
-                            sl_list, sl_key_list, mom_labels):
+def get_ama_data_per_config(bias_list, sl_list, key_list, mom_labels):
     """ Think of something to put here :^/ """
+    bias_key_list, sl_key_list = key_list
 
     # First I will work on the bias
     bias_data = get_bias_data_per_config(bias_list, bias_key_list, mom_labels)
@@ -264,8 +272,14 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
               file_params, key_params, pos_mom_tuples,
               attrs_dict):
     """ Think of something to put here :^/ """
-    # get
-    
+    # get appropriate write function
+    func_key_call = {'ex': (get_ex_data_per_config, key_to_ex_file_list)
+                 'sl': (get_sl_data_per_config, key_to_sl_file_list)
+                 'bias': (get_bias_data_per_config, key_to_bias_file_list)
+                 'ama': (get_ama_data_per_config, key_to_ama_file_list)}
+    assert method in func_call.keys()
+    get_func, key_func = func_call[method]
+        
     # Preliminary Stuff
     config, tag = file_params
     x_tup, mom_tup = pos_mum_tuples
@@ -275,26 +289,9 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
     if path_out[-1] is not '/':
         path_out += '/'
 
-    print config
-
-
-'''
-def aff_to_h5_bin_bias(paths, h5_name, file_params,
-                       key_tree, t_len, pos_mom_tuples,
-                       key_params, attrs_dict):
-    """
-    First part of official stripping script. This will generate two
-    hdf5 files; one for the bias, and the other for the average sloppies.
-    """
-    # Preliminary Stuff
-    config, tag = file_params
-    x_tup, mom_tup =  pos_mom_tuples
-    csrc_ind, insert, delim = key_params
-    assert len(paths) == 2
-    path_in, path_out = paths
-    if path_out[-1] is not '/':
-        path_out += '/'
-    
+    h5_name = "_".join([h5_name, method, tag])
+    h5_name += ".h5"
+    print h5_name
     print "config: {0}".format(config)
     mom_labels = key_tree[-1]
     mom_len = len(mom_labels)
@@ -304,53 +301,39 @@ def aff_to_h5_bin_bias(paths, h5_name, file_params,
 
     hs_shape = (mom_len, t_len)
     hs_dtype = np.complex128
-    h5_file_bias = h5py(path_out+'bias_'+h5_name, 'w')
-    h5_file_slpy = h5py(path_out+'sloppy_'+h5_name, 'w')
-    print "h5files created:\n{0}\n{1}".format(
-        h5_files_bias.filename(),
-        h5_files_slpy.filename()
-    )
 
+    h5_file = h5py(path_out+h5_name, 'w')
+    print "hdf5 file {0} created".format(h5_file.filename())
+    
     key_tree_gen = it.product(*key_tree[:-1])
 
     for key in key_tree_gen:
-        bias_data = np.empty(hs_shape, dtype=hs_dtype)
-        slpy_data = np.empty(hs_shape, dtype=hs_dtype)
+        data = np.empty(hs_shape, dtype=hs_dtype)
         key = list(key)
         h5key = "/".join(key)
         print "current key: {0}".format(h5key)
 
+        # get files
         files = get_files(path_in, config, tag)
         bfiles, sfiles = sort_files(files, csrc_ind)
 
-        # need a key_to_file function
-        bs_key_list = key_to_bias_file_list(key, bfiles, csrc_ind,
-                                            insert, delim)
-        sl_key_list = key_to_sl_file_list(key, sfiles, csrc_ind,
-                                          insert, delim)
+        # get key
+        key_list = key_func(key, bfiles, sfiles, 
+                           csrc_ind, insert, delim)
 
-        bias_data, sl_data = get_data_per_config(
-            bfiles, bs_key_list, sfiles, sl_key_list, mom_labels
-        )
+        # get data
+        data = get_func(bfiles, sfiles, key_list, mom_labels)
+        dset = h5_file.require_dataset(h5key, hs_shape,
+                                       dtype=hs_dtype,
+                                       fletcher32=True)
+        dset[:] = data
 
-        f_dset_bias = h5_file_bias.require_dataset(h5key, hs_shape,
-                                                   dtype=hs_dtype,
-                                                   fletcher32=True)
-        f_dset_bias[:] = bias_data
-        f_dset_slpy = h5_file_slpy.require_dataset(h5key, hs_shape,
-                                                   dtype=hs_dtype,
-                                                   fletcher32=True)
-        f_dset_slpy[:] = sl_data
-
-        for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
-            f_dset_bias.attrs[att_key] = att_val
-            f_dset_slpy.attrs[att_key] = att_val
-        f_dset_bias.attrs.file.flush()
-        f_dset_slpy.attrs.file.flush()
-    h5_file_bias.close()
-    h5_file_slpy.close()
+    for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
+        h5_file.attrs[att_key] = att_val
+    h5_file.file.flush()
+    h5_file.close()
     print "File Closed"
-'''
+        
 
 def h5_convert_ama(paths, h5_name, config_list, tag, key_tree):
     """
