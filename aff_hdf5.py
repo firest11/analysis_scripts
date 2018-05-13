@@ -333,12 +333,27 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
     h5_file.file.flush()
     h5_file.close()
     print "File Closed"
-        
 
-def h5_convert_ama(paths, h5_name, config_list, tag, key_tree):
+
+def get_h5_key(h5file):
+    """ Get h5keys as an iterator """
+    h5f1 = h5py.File(h5file, 'r')
+    h5_list = [h5f1.keys()]
+    h5_tag = h5_list[0][0]+"/"
+    while type(h5f1[h5_tag]) == h5py._hl.group.Group:
+        h5_list.append(h5f1[h5_tag].keys())
+        h5_tag += h5f1[h5_tag].keys()[0] + "/"
+    return it.product(h5_list)
+
+
+def h5_convert_ama(paths, h5_name, config_list, tag):
     """
     Takes all the bias and sloppy data and 
     turns them into one ama file with all 
     configurations
     """
+    path_in, path_out = paths
+    files = [get_files(path_in, config, tag) for config in config_list]
+    assert len(files) == config_list
+    key_tree_gen = get_h5_key(files[0])
     return None
