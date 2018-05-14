@@ -6,6 +6,7 @@ import numpy as np
 import aff
 import h5py
 
+import pdb
 
 def label_to_vec(label, str_tup, delim=''):
     """
@@ -40,11 +41,10 @@ def vec_to_label(vector, str_tup, delim=''):
 
 def sort_labels(labels, str_tup, delim=''):
     """ Given list of labels, returns sorted labels with vectors as well """
-    ltv = ft.partial(label_to_vec, str_tup, delim)
-    vtl = ft.partial(vec_to_label, str_tup, delim)
-    vecs = map(ltv, labels)
+    # pdb.set_trace()
+    vecs = [label_to_vec(lble, str_tup, delim) for lble in labels]
     vecs = sorted(vecs, key=lambda x: np.dot(x, x))
-    lbls = map(vtl, vecs)
+    lbls = [vec_to_label(vec, str_tup, delim) for vec in vecs]
     return lbls, vecs
 
 
@@ -54,10 +54,14 @@ def get_files(path, *tags):
     directory that contains all of the 'tag' strings
     returns file_list
     """
+    if path[-1] is not "/":
+        path += '/'
     files = os.listdir(path)
     for tag in tags:
         files = [fle for fle in files
                  if tag in fle]
+    for j, fle in enumerate(files):
+        files[j] = path + fle
     return files
 
 
@@ -74,8 +78,8 @@ def sort_files(file_list, csrc_ind):
     for fle in file_list:
         if 'ex' in fle:
             ex_list.append(fle)
-        elif 'sl' in f:
-            ex_list.append(fle)
+        elif 'sl' in fle:
+            sl_list.append(fle)
         else:
             raise "BAD File Name"
     csrc_list = []
@@ -84,9 +88,9 @@ def sort_files(file_list, csrc_ind):
     bias_list = []
     for it, csrc in enumerate(csrc_list):
         for fsl in sl_list:
-            if csrc in fsl:
+            if csrc == fsl.split('.')[csrc_ind]:
                 bias_list.append((ex_list[it], fsl))
-            break
+                break
 
     return bias_list, sl_list
 
@@ -116,11 +120,12 @@ def key_to_file(key, aff_file, csrc_ind=None, insert=None, delim=None):
         return newcsrc
 
     if csrc_ind is not None:
-        assert insert is not None
         csrc = aff_file.split('.')[csrc_ind]
-        if delim is not None:
+        if (delim is not None) and (insert is not None):
             csrc = mod_csrc(csrc, delim)
-        newkey = key[:insert] + [csrc] + key[insert:]
+            newkey = key[:insert] + [csrc] + key[insert:]
+        else:
+            newkey = key
     else:
         newkey = key
     newkey = "/".join(newkey)
@@ -174,10 +179,10 @@ def key_to_ama_file_list(key, bias_list, sl_list, csrc_ind=None,
         bs_key_list.append(key_entry)
     sl_key_list = [
         key_to_file(key, fle, csrc_ind, insert, delim)
-        for fle in file_list
+        for fle in sl_list
     ]
     key_list = (bs_key_list, sl_key_list)
-    return return key_list
+    return key_list
 
 
 def get_aff_data(aff_r, aff_key, mom_labels, phases=None):
@@ -259,30 +264,32 @@ def get_ama_data_per_config(bias_list, sl_list, key_list, mom_labels):
     bias_key_list, sl_key_list = key_list
 
     # First I will work on the bias
-    bias_data = get_bias_data_per_config(bias_list, bias_key_list, mom_labels)
+    bias_data = get_bias_data_per_config(bias_list, sl_list,
+                                         bias_key_list, mom_labels)
     dat_dtype = bias_data.dtype
 
     # Now for sloppy data
-    sl_data = get_sl_dat_per_config(sl_list, sl_key_list, mom_labes)
+    sl_data = get_sl_dat_per_config(bias_list, sl_list,
+                                    sl_key_list, mom_labes)
     ama_data = bias_data + sl_data
     return ama_data
 
 
 def aff_to_h5(paths, method, h5_name, key_tree, t_len,
               file_params, key_params, pos_mom_tuples,
-              attrs_dict):
+              attrs_dict=None):
     """ Think of something to put here :^/ """
     # get appropriate write function
-    func_key_call = {'ex': (get_ex_data_per_config, key_to_ex_file_list)
-                 'sl': (get_sl_data_per_config, key_to_sl_file_list)
-                 'bias': (get_bias_data_per_config, key_to_bias_file_list)
-                 'ama': (get_ama_data_per_config, key_to_ama_file_list)}
-    assert method in func_call.keys()
-    get_func, key_func = func_call[method]
+    func_key_call = {'ex': (get_ex_data_per_config, key_to_ex_file_list),
+                     'sl': (get_sl_data_per_config, key_to_sl_file_list),
+                     'bias': (get_bias_data_per_config, key_to_bias_file_list),
+                     'ama': (get_ama_data_per_config, key_to_ama_file_list)}
+    assert method in func_key_call.keys()
+    get_func, key_func = func_key_call[method]
         
     # Preliminary Stuff
     config, tag = file_params
-    x_tup, mom_tup = pos_mum_tuples
+    x_tup, mom_tup = pos_mom_tuples
     csrc_ind, insert, delim = key_params
     assert len(paths) == 2
     path_in, path_out = paths
@@ -296,14 +303,14 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
     mom_labels = key_tree[-1]
     mom_len = len(mom_labels)
     mom_labels, mom_vec = sort_labels(mom_labels, mom_tup, '_')
-    mom_vecs = map(np.asarray, mom_vecs)
+    mom_vecs = map(np.asarray, mom_vec)
     key_tree[-1] = mom_labels
 
     hs_shape = (mom_len, t_len)
     hs_dtype = np.complex128
 
-    h5_file = h5py(path_out+h5_name, 'w')
-    print "hdf5 file {0} created".format(h5_file.filename())
+    h5_file = h5py.File(path_out+h5_name, 'w')
+    print "hdf5 file {0} created".format(h5_file.filename)
     
     key_tree_gen = it.product(*key_tree[:-1])
 
@@ -328,8 +335,9 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
                                        fletcher32=True)
         dset[:] = data
 
-    for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
-        h5_file.attrs[att_key] = att_val
+    if attrs_dict is not None:
+        for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
+            h5_file.attrs[att_key] = att_val
     h5_file.file.flush()
     h5_file.close()
     print "File Closed"
@@ -346,14 +354,39 @@ def get_h5_key(h5file):
     return it.product(h5_list)
 
 
-def h5_convert_ama(paths, h5_name, config_list, tag):
+def h5_convert_ama(paths, h5_name, tag, config_list, mom_len, t_len,
+                   attrs_dict=None):
     """
     Takes all the bias and sloppy data and 
     turns them into one ama file with all 
     configurations
     """
     path_in, path_out = paths
+    if path_out[-1] is not '/':
+        path_out += '/'
+    hs_shape = (len(config_list), mom_len, t_len)
     files = [get_files(path_in, config, tag) for config in config_list]
     assert len(files) == config_list
+    my_name = h5_name + "_" + tag + ".h5"
+    h5file = h5py(path_out + my_name, 'w')
     key_tree_gen = get_h5_key(files[0])
-    return None
+
+    for key in key_tree_gen:
+        data = np.empty(hs_shape, dtype=np.complex128)
+        key = list(key)
+        h5key = "/".join(key)
+        print "current key: {0}".format(h5key)
+
+        for j, (config, cfile) in enumerate(zip(config_list, files)):
+            print j, config
+            h5f = h5py.File(cfile, 'r')
+            assert data.shape[1:] == h5f[h5key].shape
+            data[j, ...] = h5f[h5key][...]
+            h5f.close()
+
+        if attrs_dict is not None:
+            for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
+                h5file.attrs[att_key] = att_val
+        h5file.file.flush()
+    h5file.close()
+    print "File Closed"
