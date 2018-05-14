@@ -36,6 +36,8 @@ def vec_to_label(vector, str_tup, delim=''):
         label += s_t + str(vec)
         if j < len(vector):
             label += delim
+    if label[-1] == delim:
+        label = label[:-1]
     return label
 
 
@@ -269,15 +271,15 @@ def get_ama_data_per_config(bias_list, sl_list, key_list, mom_labels):
     dat_dtype = bias_data.dtype
 
     # Now for sloppy data
-    sl_data = get_sl_dat_per_config(bias_list, sl_list,
-                                    sl_key_list, mom_labes)
+    sl_data = get_sl_data_per_config(bias_list, sl_list,
+                                    sl_key_list, mom_labels)
     ama_data = bias_data + sl_data
     return ama_data
 
 
 def aff_to_h5(paths, method, h5_name, key_tree, t_len,
-              file_params, key_params, pos_mom_tuples,
-              attrs_dict=None):
+              file_params, key_params, dict_label,
+              pos_mom_tuples, attrs_dict=None):
     """ Think of something to put here :^/ """
     # get appropriate write function
     func_key_call = {'ex': (get_ex_data_per_config, key_to_ex_file_list),
@@ -296,7 +298,7 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
     if path_out[-1] is not '/':
         path_out += '/'
 
-    h5_name = "_".join([h5_name, method, tag])
+    h5_name = ".".join([h5_name, method, tag])
     h5_name += ".h5"
     print h5_name
     print "config: {0}".format(config)
@@ -308,6 +310,10 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
 
     hs_shape = (mom_len, t_len)
     hs_dtype = np.complex128
+
+    if attrs_dict is None:
+        attrs_dict = {}
+    attrs_dict[dict_label] = mom_vec
 
     h5_file = h5py.File(path_out+h5_name, 'w')
     print "hdf5 file {0} created".format(h5_file.filename)
@@ -335,9 +341,8 @@ def aff_to_h5(paths, method, h5_name, key_tree, t_len,
                                        fletcher32=True)
         dset[:] = data
 
-    if attrs_dict is not None:
-        for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
-            h5_file.attrs[att_key] = att_val
+    for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
+        h5_file.attrs[att_key] = att_val
     h5_file.file.flush()
     h5_file.close()
     print "File Closed"
@@ -351,7 +356,7 @@ def get_h5_key(h5file):
     while type(h5f1[h5_tag]) == h5py._hl.group.Group:
         h5_list.append(h5f1[h5_tag].keys())
         h5_tag += h5f1[h5_tag].keys()[0] + "/"
-    return it.product(h5_list)
+    return it.product(*h5_list)
 
 
 def h5_convert_ama(paths, h5_name, tag, config_list, mom_len, t_len,
@@ -365,25 +370,38 @@ def h5_convert_ama(paths, h5_name, tag, config_list, mom_len, t_len,
     if path_out[-1] is not '/':
         path_out += '/'
     hs_shape = (len(config_list), mom_len, t_len)
-    files = [get_files(path_in, config, tag) for config in config_list]
-    assert len(files) == config_list
+    files = [get_files(path_in, config, tag)[0] for config in config_list]
+    assert len(files) == len(config_list)
     my_name = h5_name + "_" + tag + ".h5"
-    h5file = h5py(path_out + my_name, 'w')
-    key_tree_gen = get_h5_key(files[0])
 
+    h5file = h5py.File(path_out + my_name, 'w')
+    key_tree_gen = get_h5_key(files[0])
+    
     for key in key_tree_gen:
         data = np.empty(hs_shape, dtype=np.complex128)
         key = list(key)
         h5key = "/".join(key)
         print "current key: {0}".format(h5key)
 
+        dset = h5file.require_dataset(h5key, hs_shape,
+                                      dtype=np.complex128,
+                                      fletcher32=True)
+
         for j, (config, cfile) in enumerate(zip(config_list, files)):
             print j, config
             h5f = h5py.File(cfile, 'r')
+
+            if attrs_dict is None:
+                attrs_dict = {}
+                for att_key, att_item in zip(h5f.attrs.keys(), h5f.attrs.values()):
+                    attrs_dict[att_key] = att_item
+                    
             assert data.shape[1:] == h5f[h5key].shape
             data[j, ...] = h5f[h5key][...]
             h5f.close()
 
+        dset[:] = data
+        
         if attrs_dict is not None:
             for att_key, att_val in zip(attrs_dict.keys(), attrs_dict.values()):
                 h5file.attrs[att_key] = att_val
