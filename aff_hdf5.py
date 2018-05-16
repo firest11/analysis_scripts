@@ -356,6 +356,7 @@ def get_h5_key(h5file):
     while type(h5f1[h5_tag]) == h5py._hl.group.Group:
         h5_list.append(h5f1[h5_tag].keys())
         h5_tag += h5f1[h5_tag].keys()[0] + "/"
+    h5f1.close()
     return it.product(*h5_list)
 
 
