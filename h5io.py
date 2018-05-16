@@ -17,7 +17,7 @@ def get_pvec_indices(h5dat, h5key, pvec_tag, pvecs):
 
 def get_h5_data(h5dat, h5key, pinds):
     data = h5dat[h5key][...]
-    data = data[:, pinds, :]
+    data = data[:, pinds, ...]
     return data
 
 
