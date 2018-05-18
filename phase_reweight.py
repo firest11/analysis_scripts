@@ -25,9 +25,9 @@ def gen_phase_matrix(data):
     shape = (N, N)
     dtype = data.dtype
     matrix = np.empty(shape=shape, dtype=dtype)
-    arg = arg_twopt(data)
+    norm_data = norm_twopt(data)
     for n in xrange(N):
-        matrix[n] = np.exp(-1j*np.roll(arg, n))*data
+        matrix[n] = data/np.roll(norm_data, n)
     return matrix
 
 
