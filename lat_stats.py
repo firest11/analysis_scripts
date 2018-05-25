@@ -15,14 +15,14 @@ def jk_blocks(data, jk_smp, axis=None):
         assert axis < data.shape[axis] and axis >= 0
     blocks = []
         
-    size = len(data)
+    size = data.shape[axis]
     N = size/jk_smp
     chunk = size/N
     inds = np.arange(0, size, jk_smp)
     block = np.delete(data, inds, axis=axis)
     blocks.append(block)
     inds += 1
-    while inds[-1] < len(data):
+    while inds[-1] < data.shape[axis]:
         block = np.delete(data, inds, axis=axis)
         blocks.append(block)
         inds += 1
