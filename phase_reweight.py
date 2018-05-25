@@ -27,7 +27,7 @@ def gen_phase_matrix(data):
     matrix = np.empty(shape=shape, dtype=dtype)
     norm_data = norm_twopt(data)
     for n in xrange(N):
-        matrix[n] = data/np.roll(norm_data, n)
+        matrix[n] = data/np.roll(norm_data, -n)
     return matrix
 
 

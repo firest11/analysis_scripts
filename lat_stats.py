@@ -8,9 +8,11 @@ def jk_blocks(data, jk_smp, axis=None):
     Function that takes in data-set and
     creates jackknife blocks
     """
-    assert len(data) % jk_smp == 0
+    if axis == None:
+        axis = 0
+    assert data.shape[axis] % jk_smp == 0
     if axis is not None:
-        assert axis < len(data) and axis >= 0
+        assert axis < data.shape[axis] and axis >= 0
     blocks = []
         
     size = len(data)

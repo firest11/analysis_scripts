@@ -39,7 +39,7 @@ def hess(meff, t, ratio):
 def dispers(psq):
     Nx = 48.
     mpisq = (0.0913)**2
-    psq *= (2*np.pi/Nx)
+    psq *= (2*np.pi/Nx)**2
     return np.sqrt(psq + mpisq)
 
 
@@ -47,7 +47,7 @@ def newton_meff(func, Dat, guess, fprime=None, fprime2=None, **kwargs):
     """ gives me effective mass plot as function of time: newton """
     jk_smp = Dat.shape[0]
     T = np.arange(Dat.shape[-1])
-    ratio = np.roll(Dat, 1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
+    ratio = np.roll(Dat, -1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
     # cv == central value
     cv_arglist = [(t, ratio[t_iter]) for t_iter, t in enumerate(T)]
     cv = [
@@ -82,7 +82,7 @@ def bisect_meff(func, Dat, a, b):
     """ gives me effective mass plot as a function of time: brentq """
     jk_smp = Dat.shape[0]
     T = np.arange(Dat.shape[-1])
-    ratio = np.roll(Dat, 1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
+    ratio = np.roll(Dat, -1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
     cv_arglist = [(t, ratio[t_iter]) for t_iter, t in enumerate(T)]
     cv = [
         opt.brentq(func, a, b, args=cv_arg)
