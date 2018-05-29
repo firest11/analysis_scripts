@@ -14,7 +14,7 @@ def match_indices(list1, list2, match=True):
     """
     indices = []
     for j, (l1, l2) in enumerate(zip(list1, list2)):
-        compare = l1[j]==l2[j]
+        compare = l1==l2
         if compare == match:
             indices.append(j)
     return indices
@@ -87,10 +87,12 @@ def newton_meff(func, Dat, guess, fprime=None, fprime2=None, **kwargs):
     for t, cv_arg in zip(T, cv_arglist):
         try:
             cv.append(opt.newton(func, guess, args=cv_arg,
-                                 fprime=fprime, fprime2=fprime2))
+                                 fprime=fprime, fprime2=fprime2,
+                                 maxiter=1000, tol=1.45e-6))
             t_return.append(t)
         except ValueError:
-            print "skipping t = {0}".format(t)
+            # print "skipping t = {0}".format(t)
+            pass
     assert len(t_return) > 0
     t_return = np.asarray(t_return)
     cv = np.asarray(cv)
@@ -124,7 +126,7 @@ def newton_meff_mean_var(func, Dat, guess, fprime=None, fprime2=None, **kwargs):
     ])
     err = ((jk_smp - 1.0)/jk_smp)*diff.sum(axis=0)
     err = np.sqrt(err)
-    return cv, err
+    return trange, cv, err
 
 
 def bisect_meff(func, Dat, a, b):
@@ -133,12 +135,20 @@ def bisect_meff(func, Dat, a, b):
     T = np.arange(Dat.shape[-1])
     ratio = np.roll(Dat, -1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
     cv_arglist = [(t, ratio[t_iter]) for t_iter, t in enumerate(T)]
-    cv = [
-        opt.brentq(func, a, b, args=cv_arg)
-        for cv_arg in cv_arglist
-    ]
-    return cv
-
+    t_return = []
+    cv = []
+    for t, cv_arg in zip(T, cv_arglist):
+        try:
+            cv.append(opt.brentq(func, a, b, args=cv_arg))
+            t_return.append(t)
+        except ValueError:
+            # print "skipping t = {0}".format(t)
+            pass
+    assert len(t_return) > 0
+    t_return = np.asarray(t_return)
+    cv = np.asarray(cv)
+    return t_return, cv
+    
 
 def bisect_meff_mean_var(func, Dat, a, b):
     """
@@ -147,9 +157,39 @@ def bisect_meff_mean_var(func, Dat, a, b):
     jk_smp = Dat.shape[0]
     T = np.arange(Dat.shape[-1])
     Blocks = lstats.jk_blocks(Dat, jk_smp, axis=0)
-    cv = bisect_meff(func, Dat, a, b)
-    cvblk = np.array([bisect_meff(func, blk, a, b) for blk in Blocks])
-    diff = np.array([pow(cv - cvb, 2) for cvb in cvblk])
+    trange, cv = bisect_meff(func, Dat, a, b)
+    t_blocks, cv_blocks = [], []
+    for blk in Blocks:
+        tblk, cvblk = bisect_meff(func, Dat, a, b)
+        t_blocks.append(tblk)
+        cv_blocks.append(cvblk)
+    t_list_set = [trange]
+    for tblk in t_blocks:
+        t_list_set.append(tblk)
+    match_index = large_match_indices(t_list_set)
+    trange = trange[match_index]
+    cv = cv[match_index]
+    for j, (tblk, cvblk) in enumerate(zip(t_blocks, cv_blocks)):
+        t_blocks[j] = tblk[match_index]
+        cv_blocks[j] = cvblk[match_index]
+    diff = np.array([
+        pow(cv - cvb, 2) for cvb in cvblk
+    ])
     err = ((jk_smp - 1.0)/jk_smp)*diff.sum(axis=0)
     err = np.sqrt(err)
-    return cv, err
+    return trange, cv, err
+
+
+# Phase Reweighting
+def norm_c2pt(data):
+    norm = data*data.conj()
+    return np.sqrt(norm)
+
+
+def phrw_c2pt(data, to):
+    norm = norm_c2pt(data)
+    phrw_phase = np.roll(norm, -to, axis=1)
+    new_data = np.empty(data.shape, data.dtype)
+    for j in xrange(data.shape[0]):
+        new_data[j] = data[j]/phrw_phase[j]
+    return new_data
