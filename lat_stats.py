@@ -57,13 +57,21 @@ def calc_jk_mean_var(data, blocks, axis=None):
     blocks_mean = np.array([
         blk.mean(axis) for blk in blocks
     ])
-    diff_blocks = [
-        pow(mean - block, 2) for block in blocks_mean
+    diff_blocks_real = [
+        pow(np.real(mean - block), 2)
+        for block in blocks_mean
     ]
-    variance = ft.reduce(lambda x, y: x + y, diff_blocks)
-    variance *= (jk_smp - 1.0)/jk_smp
+    diff_blocks_imag = [
+        pow(np.imag(mean - block), 2)
+        for block in blocks_mean
+    ]
+    var_real = ft.reduce(lambda x, y: x + y, diff_blocks_real)
+    var_real *= (jk_smp - 1.0)/jk_smp
+    var_imag = ft.reduce(lambda x, y: x + y, diff_blocks_imag)
+    var_imag *= (jk_smp - 1.0)/jk_smp
+    error = np.sqrt(var_real) + 1j*np.sqrt(var_imag)
 
-    return mean, np.sqrt(variance)
+    return mean, error
 
 
 def calc_jk_ratio_mean_var(data1, data2, blocks1, blocks2, d_t=None, axis=None):
@@ -83,12 +91,18 @@ def calc_jk_ratio_mean_var(data1, data2, blocks1, blocks2, d_t=None, axis=None):
         blk1.mean(axis, dtype)/blk2.mean(axis, dtype)
         for blk1, blk2 in zip(blocks1, blocks2)
     ]
-    diff_blocks = [
-        pow(mean - block, 2) for block in blocks_mean
+    diff_blocks_real = [
+        pow(np.real(mean - block), 2) for block in blocks_mean
     ]
-    variance = ft.reduce(lambda x, y: x + y, diff_blocks)
-    variance *= (jk_smp - 1.0)/jk_smp
-    return mean, np.sqrt(variance)
+    diff_blocks_imag = [
+        pow(np.imag(mean - block), 2) for block in blocks_mean
+    ]
+    var_real = ft.reduce(lambda x, y: x + y, diff_blocks_real)
+    var_real *= (jk_smp - 1.0)/jk_smp
+    var_imag = ft.reduce(lambda x, y: x + y, diff_blocks_imag)
+    var_imag *= (jk_smp - 1.0)/jk_smp
+    error = np.sqrt(var_real) + 1j*np.sqrt(var_imag)
+    return mean, error
 
 
 def calc_bias_corrected_jk_mean_var(data, blocks, axis=None):
@@ -104,13 +118,20 @@ def calc_bias_corrected_jk_mean_var(data, blocks, axis=None):
     ])
     block_mean = np.mean(blocks_mean, axis=0)
     estimate = jk_smp*mean - (jk_smp-1)*block_mean
-    diff_blocks = [
-        pow(estimate - block, 2) for block in blocks_mean
+    diff_blocks_real = [
+        pow(np.real(estimate - block), 2) for block in blocks_mean
     ]
-    variance = ft.reduce(lambda x, y: x + y, diff_blocks)
-    variance *= (jk_smp - 1.0)/jk_smp
+    diff_blocks_imag = [
+        pow(np.imag(estimate - block), 2) for block in blocks_mean
+    ]
+    variance_real = ft.reduce(lambda x, y: x + y, diff_blocks_real)
+    variance_real *= (jk_smp - 1.0)/jk_smp
+    variance_imag = ft.reduce(lambda x, y: x + y, diff_blocks_imag)
+    variance_imag *= (jk_smp - 1.0)/jk_smp
+    err_real, err_imag  = np.sqrt(variance_real), np.sqrt(variance_imag)
+    error = err_real + 1j*err_imag
 
-    return mean, np.sqrt(variance)
+    return mean, error
 
 
 def calc_bias_corrected_jk_ratio_mean_var(data1, data2, blocks1, blocks2,

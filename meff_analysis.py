@@ -6,34 +6,26 @@ import lat_stats as lstats
 
 
 # Auxillary Functions
-def match_indices(list1, list2, match=True):
-    """
-    Returns common indices between list1 and list2
-    list1 and list2 must be the same length
-    If 'match'=False, returns indices where list1 != list2
-    """
-    indices = []
-    for j, (l1, l2) in enumerate(zip(list1, list2)):
-        compare = l1==l2
-        if compare == match:
-            indices.append(j)
-    return indices
+def match_lists(my_lists, match=True):
+    """ returns domain and range of list """
+    func_table = {True: np.intersect1d, False: np.union1d}
+    domain_list = [my_list[0] for my_list in my_lists]
+    domain = ft.reduce(func_table[match], domain_list)
+    image = np.empty(shape=(len(my_lists), len(domain)),
+                     dtype=my_lists[0][1].dtype)
+    for j, my_list in enumerate(my_lists):
+        for k, dm in enumerate(domain):
+            for tval, ival in zip(my_list[0], my_list[1]):
+                if dm == tval:
+                    image[j, k] = ival
+                    break
+    return domain, image
 
 
-def large_match_indices(lists, match=True):
-    """
-    Returns common (uncommon) indices between a list of lists
-    """
-    check_lists = [len(lst)==len(lists[0]) for lst in lists[1:]]
-    assert all(check_lists)
-    list1 = lists[0]
-    indices_list = [match_indices(list1, lst, match=match) for lst in lists]
-    func_table = {'True': np.intersect1d, 'False': np.union1d}
-    match_index = ft.reduce(func_table[str(match)], indices_list)
-    return match_index
+# ---------- Making Effective Mass Plots for Two-Point Function ---------- #
+# unsophisticated meff-plot
 
 
-# Making Effective Mass Plots for Two-Point Function
 def func(meff, t, ratio):
     """ main function """
     Nt = 64.0
@@ -75,60 +67,6 @@ def dispers(psq):
     return np.sqrt(psq + mpisq)
 
 
-def newton_meff(func, Dat, guess, fprime=None, fprime2=None, **kwargs):
-    """ gives me effective mass plot as function of time: newton """
-    jk_smp = Dat.shape[0]
-    T = np.arange(Dat.shape[-1])
-    ratio = np.roll(Dat, -1, axis=-1).mean(axis=0)/Dat.mean(axis=0)
-    # cv == central value
-    cv_arglist = [(t, ratio[t_iter]) for t_iter, t in enumerate(T)]
-    t_return = []
-    cv = []
-    for t, cv_arg in zip(T, cv_arglist):
-        try:
-            cv.append(opt.newton(func, guess, args=cv_arg,
-                                 fprime=fprime, fprime2=fprime2,
-                                 maxiter=1000, tol=1.45e-6))
-            t_return.append(t)
-        except ValueError:
-            # print "skipping t = {0}".format(t)
-            pass
-    assert len(t_return) > 0
-    t_return = np.asarray(t_return)
-    cv = np.asarray(cv)
-    return t_return, cv
-
-
-def newton_meff_mean_var(func, Dat, guess, fprime=None, fprime2=None, **kwargs):
-    """ 
-    gives me effective mass plot as function of time with jackknife error: newton
-    """
-    jk_smp = Dat.shape[0]
-    T = np.arange(Dat.shape[-1])
-    Blocks = lstats.jk_blocks(Dat, jk_smp, axis=0)
-    trange, cv = newton_meff(func, Dat, guess, fprime, fprime2, **kwargs)
-    t_blocks, cv_blocks = [], []
-    for blk in Blocks:
-        tblk, cvblk = newton_meff(func, Dat, guess, fprime, fprime2, **kwargs)
-        t_blocks.append(tblk)
-        cv_blocks.append(cvblk)
-    t_list_set = [trange]
-    for tblk in t_blocks:
-        t_list_set.append(tblk)
-    match_index = large_match_indices(t_list_set) # match == True, take union
-    trange = trange[match_index]
-    cv = cv[match_index]
-    for j, (tblk, cvblk) in enumerate(zip(t_blocks, cv_blocks)):
-        t_blocks[j] = tblk[match_index]
-        cv_blocks[j] = cvblk[match_index]
-    diff = np.array([
-        pow(cv - cvb, 2) for cvb in cvblk
-    ])
-    err = ((jk_smp - 1.0)/jk_smp)*diff.sum(axis=0)
-    err = np.sqrt(err)
-    return trange, cv, err
-
-
 def bisect_meff(func, Dat, a, b):
     """ gives me effective mass plot as a function of time: brentq """
     jk_smp = Dat.shape[0]
@@ -148,36 +86,25 @@ def bisect_meff(func, Dat, a, b):
     t_return = np.asarray(t_return)
     cv = np.asarray(cv)
     return t_return, cv
-    
+
 
 def bisect_meff_mean_var(func, Dat, a, b):
     """
-    gives me effective mass plot as function of time with jackknife error: brentq
+    another attempt
     """
     jk_smp = Dat.shape[0]
-    T = np.arange(Dat.shape[-1])
+    Dat = Dat.real
     Blocks = lstats.jk_blocks(Dat, jk_smp, axis=0)
-    trange, cv = bisect_meff(func, Dat, a, b)
-    t_blocks, cv_blocks = [], []
-    for blk in Blocks:
-        tblk, cvblk = bisect_meff(func, Dat, a, b)
-        t_blocks.append(tblk)
-        cv_blocks.append(cvblk)
-    t_list_set = [trange]
-    for tblk in t_blocks:
-        t_list_set.append(tblk)
-    match_index = large_match_indices(t_list_set)
-    trange = trange[match_index]
-    cv = cv[match_index]
-    for j, (tblk, cvblk) in enumerate(zip(t_blocks, cv_blocks)):
-        t_blocks[j] = tblk[match_index]
-        cv_blocks[j] = cvblk[match_index]
-    diff = np.array([
-        pow(cv - cvb, 2) for cvb in cvblk
-    ])
-    err = ((jk_smp - 1.0)/jk_smp)*diff.sum(axis=0)
-    err = np.sqrt(err)
-    return trange, cv, err
+    main_vals = bisect_meff(func, Dat, a, b)
+    val_list = [main_vals]
+    for dat_block in Blocks:
+        val_list.append(bisect_meff(func, dat_block, a, b))
+    trange, image_list = match_lists(val_list)
+    cv = image_list[0]
+    diff_blocks = [pow(cv - cv_blk, 2) for cv_blk in image_list[1:]]
+    variance = ft.reduce(lambda x, y: x + y, diff_blocks)
+    variance *= (jk_smp - 1.0)/jk_smp
+    return trange, cv, np.sqrt(variance)
 
 
 # Phase Reweighting
